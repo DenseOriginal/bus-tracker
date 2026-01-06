@@ -13,6 +13,8 @@ dayjs.extend(timezone);
 
 loadSync({ export: true });
 
+
+
 async function getSoonestDepartures() {
 	const kantorvængetDepartures = await fetchMidttrafikAPI(departuresEndpoint(Stops.KantorvængetModKolt));
 	const vejlbyDepartures = await fetchMidttrafikAPI(departuresEndpoint(Stops.VejlbyModKolt));
@@ -37,11 +39,16 @@ async function getSoonestDepartures() {
 			datetime: getDepartureTime(dep)
 		})
 
+	const departureTime = dayjs(soonestKantorvænget.dateTime).tz('Europe/Copenhagen');
+	const denmarkNow = dayjs().tz('Europe/Copenhagen');
+
 	return {
 		vejlby: soonestVejlby ? mapper(soonestVejlby, WalkingTimes.ToVejlby) : null,
 		skejby: soonestKantorvænget ? mapper(soonestKantorvænget, WalkingTimes.ToKantorvænget) : null,
-		denmarkNow: dayjs().tz('Europe/Copenhagen').format(),
-
+		denmarkNow: denmarkNow.format(),
+		departureTime: departureTime.format(),
+		diff1: departureTime.diff(denmarkNow, 'minute', true),
+		diff2: getDepartureDiffInMinutes(soonestKantorvænget)
 	};
 }
 
