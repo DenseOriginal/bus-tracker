@@ -1,13 +1,14 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h> 
+#include "./conf.h"
 
 // --- Configuration ---
-const char* ssid = "";
-const char* password = "";
-const String serverUrl = "http://192.168.8.146:4242/";
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
+const String serverUrl = BUS_API_URL;
 
 // --- Pin Definitions ---
 #define LED_PIN     D3
@@ -95,7 +96,8 @@ void updateDisplay() {
     return; 
   }
 
-  WiFiClient client;
+  WiFiClientSecure client;
+  client.setInsecure(); // Ignore SSL certificate validation for simplicity
   HTTPClient http;
 
   Serial.print("Fetching data...");
@@ -140,6 +142,8 @@ void updateDisplay() {
 // --- Main Setup ---
 void setup() {
   Serial.begin(115200);
+
+  Serial.print("API_URL: "); Serial.println(serverUrl);
 
   // Hardware Init
   strip.begin();
@@ -199,10 +203,8 @@ void loop() {
 }
 
 void startupAnimation() {
-  Serial.print("Animation: ");
   unsigned long diff = millis() - wakeStartTime;
   double brightness = ((sin(diff / 100) + 1) / 2) / 2;
-  Serial.println(brightness);
   strip.fill(strip.Color(20 * brightness, 20 * brightness, 200 * brightness));
   strip.show();
 }

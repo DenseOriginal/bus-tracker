@@ -1,0 +1,3 @@
+#define BUS_API_URL ""
+#define WIFI_SSID = ""
+#define WIFI_PASSWORD = ""
