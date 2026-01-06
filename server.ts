@@ -39,7 +39,7 @@ async function getSoonestDepartures() {
 			datetime: getDepartureTime(dep)
 		})
 
-	const departureTime = dayjs(soonestKantorvænget.dateTime).tz('Europe/Copenhagen');
+	const departureTime = dayjs.tz(soonestKantorvænget.dateTime, 'Europe/Copenhagen');
 	const denmarkNow = dayjs().tz('Europe/Copenhagen');
 
 	return {

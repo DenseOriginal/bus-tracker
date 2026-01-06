@@ -12,7 +12,7 @@ dayjs.extend(timezone);
 
 export const getDiffInMinutes = (datetime: string): number => {
 	const denmarkNow = dayjs().tz('Europe/Copenhagen');
-	const departureTime = dayjs(datetime).tz('Europe/Copenhagen');
+	const departureTime = dayjs.tz(datetime, 'Europe/Copenhagen');
 	return Math.floor(departureTime.diff(denmarkNow, 'minute', true));
 }
 
