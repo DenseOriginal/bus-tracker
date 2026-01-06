@@ -3,6 +3,9 @@ import { Stops } from "./src/constants/stops.ts";
 import { WalkingTimes } from "./src/constants/walking_time.ts";
 import { Departure } from "./src/types.ts";
 import { getDepartureDiffInMinutes, getDepartureTime } from "./src/utils.ts";
+import { loadSync } from "@std/dotenv";
+
+loadSync({ export: true });
 
 async function getSoonestDepartures() {
 	const kantorvængetDepartures = await fetchMidttrafikAPI(departuresEndpoint(Stops.KantorvængetModKolt));
@@ -34,7 +37,7 @@ async function getSoonestDepartures() {
 	};
 }
 
-Deno.serve({ port: 4242, hostname: "192.168.8.146" }, async () => {
+Deno.serve({ port: 4242, hostname: Deno.env.get("HOSTNAME") }, async () => {
 	const departures = await getSoonestDepartures();
 	console.log(`[${new Date().toISOString()}]`, JSON.stringify(departures));
 	
