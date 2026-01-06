@@ -4,16 +4,8 @@ import { WalkingTimes } from "./src/constants/walking_time.ts";
 import { Departure } from "./src/types.ts";
 import { getDepartureDiffInMinutes, getDepartureTime } from "./src/utils.ts";
 import { loadSync } from "@std/dotenv";
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc.js';
-import timezone from 'dayjs/plugin/timezone.js';
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
 
 loadSync({ export: true });
-
-
 
 async function getSoonestDepartures() {
 	const kantorvængetDepartures = await fetchMidttrafikAPI(departuresEndpoint(Stops.KantorvængetModKolt));
@@ -29,7 +21,6 @@ async function getSoonestDepartures() {
 		.filter(departure => getDepartureDiffInMinutes(departure) > WalkingTimes.ToVejlby)
 		.sort((a, b) => getDepartureDiffInMinutes(a) - getDepartureDiffInMinutes(b));
 
-
 	const soonestKantorvænget = possibleKantorvængetDeparture[0];
 	const soonestVejlby = possibleVejlbyDeparture[0];
 
@@ -39,16 +30,9 @@ async function getSoonestDepartures() {
 			datetime: getDepartureTime(dep)
 		})
 
-	const departureTime = dayjs.tz(soonestKantorvænget.dateTime, 'Europe/Copenhagen');
-	const denmarkNow = dayjs().tz('Europe/Copenhagen');
-
 	return {
 		vejlby: soonestVejlby ? mapper(soonestVejlby, WalkingTimes.ToVejlby) : null,
-		skejby: soonestKantorvænget ? mapper(soonestKantorvænget, WalkingTimes.ToKantorvænget) : null,
-		denmarkNow: denmarkNow.format(),
-		departureTime: departureTime.format(),
-		diff1: departureTime.diff(denmarkNow, 'minute', true),
-		diff2: getDepartureDiffInMinutes(soonestKantorvænget)
+		skejby: soonestKantorvænget ? mapper(soonestKantorvænget, WalkingTimes.ToKantorvænget) : null
 	};
 }
 
