@@ -4,6 +4,12 @@ import { WalkingTimes } from "./src/constants/walking_time.ts";
 import { Departure } from "./src/types.ts";
 import { getDepartureDiffInMinutes, getDepartureTime } from "./src/utils.ts";
 import { loadSync } from "@std/dotenv";
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc.js';
+import timezone from 'dayjs/plugin/timezone.js';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 loadSync({ export: true });
 
@@ -33,7 +39,9 @@ async function getSoonestDepartures() {
 
 	return {
 		vejlby: soonestVejlby ? mapper(soonestVejlby, WalkingTimes.ToVejlby) : null,
-		skejby: soonestKantorvænget ? mapper(soonestKantorvænget, WalkingTimes.ToKantorvænget) : null
+		skejby: soonestKantorvænget ? mapper(soonestKantorvænget, WalkingTimes.ToKantorvænget) : null,
+		denmarkNow: dayjs().tz('Europe/Copenhagen').format(),
+
 	};
 }
 
