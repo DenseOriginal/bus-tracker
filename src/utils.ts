@@ -1,12 +1,19 @@
 import { Departure } from "./types.ts";
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc.js';
+import timezone from 'dayjs/plugin/timezone.js';
 
 export const getDepartureTime = (departure: Departure): string => {
 	return departure.realRtDateTime || departure.rtDateTime || departure.dateTime;
 }
 
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
 export const getDiffInMinutes = (datetime: string): number => {
-	const denmarkTime = new Date(new Date(datetime).toLocaleString('en-US', { timeZone: 'Europe/Copenhagen' }));
-	return Math.floor((denmarkTime.getTime() - Date.now()) / 60000);
+	const denmarkNow = dayjs().tz('Europe/Copenhagen');
+	const departureTime = dayjs(datetime).tz('Europe/Copenhagen');
+	return Math.floor(departureTime.diff(denmarkNow, 'minute', true));
 }
 
 export const getDepartureDiffInMinutes = (departure: Departure): number => getDiffInMinutes(getDepartureTime(departure));
