@@ -1,0 +1,45 @@
+import { departuresEndpoint, fetchMidttrafikAPI } from "./src/api.ts";
+import { Stops } from "./src/constants/stops.ts";
+import { WalkingTimes } from "./src/constants/walking_time.ts";
+import { Departure } from "./src/types.ts";
+import { getDepartureDiffInMinutes, getDepartureTime } from "./src/utils.ts";
+
+async function getSoonestDepartures() {
+	const kantorvængetDepartures = await fetchMidttrafikAPI(departuresEndpoint(Stops.KantorvængetModKolt));
+	const vejlbyDepartures = await fetchMidttrafikAPI(departuresEndpoint(Stops.VejlbyModKolt));
+
+	const possibleKantorvængetDeparture = kantorvængetDepartures
+		.departures
+		.filter(departure => departure.name == "1A" && !departure.cancelled)
+		.filter(departure => getDepartureDiffInMinutes(departure) > WalkingTimes.ToKantorvænget)
+		.sort((a, b) => getDepartureDiffInMinutes(a) - getDepartureDiffInMinutes(b));
+
+	const possibleVejlbyDeparture = vejlbyDepartures.departures
+		.filter(departure => getDepartureDiffInMinutes(departure) > WalkingTimes.ToVejlby)
+		.sort((a, b) => getDepartureDiffInMinutes(a) - getDepartureDiffInMinutes(b));
+
+
+	const soonestKantorvænget = possibleKantorvængetDeparture[0];
+	const soonestVejlby = possibleVejlbyDeparture[0];
+
+	const mapper = (dep: Departure, walkTime: number) => ({
+			name: dep.stop.replace(" (Aarhus Kom)", ""),
+			leaveIn: getDepartureDiffInMinutes(dep) - walkTime,
+			datetime: getDepartureTime(dep)
+		})
+
+	return {
+		vejlby: soonestVejlby ? mapper(soonestVejlby, WalkingTimes.ToVejlby) : null,
+		skejby: soonestKantorvænget ? mapper(soonestKantorvænget, WalkingTimes.ToKantorvænget) : null
+	};
+}
+
+Deno.serve({ port: 4242, hostname: "192.168.8.146" }, async () => {
+	const departures = await getSoonestDepartures();
+	console.log(`[${new Date().toISOString()}]`, JSON.stringify(departures));
+	
+	
+	return new Response(JSON.stringify(departures), {
+		headers: { "Content-Type": "application/json" },
+	});
+})
