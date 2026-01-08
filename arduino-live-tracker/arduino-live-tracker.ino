@@ -3,6 +3,7 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <Adafruit_NeoPixel.h>
+#include <PinButton.h>
 #include "./conf.h"
 
 // --- Configuration ---
@@ -16,26 +17,35 @@ const String serverUrl = BUS_API_URL;
 #define BUZZER_PIN  D1
 #define LED_COUNT   2
 
-// --- Timing Configuration ---
+// --- Configuration ---
 const unsigned long STAY_AWAKE_TIME = 1000 * 60 * 5; // 5 minutes in milliseconds
 const unsigned long REFRESH_INTERVAL = 1000 * 30; // Refresh data every 30s while awake
+const unsigned int MAX_DEPARTURE_DELTA = 25;
 
 #define BEEP_TIME 400
 #define BEEP_FREQUENCY 1200
 
+#define ALARM_BLINK_TIME 5000
+
+#define BASE_BRIGHTNESS 0.2
+
+// --- Location configuration ---
+const unsigned int VEJLBY = 0;
+const unsigned int SKEJBY = 1;
+
 // --- Global Variables ---
+PinButton button(BUTTON_PIN);
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 int vejlbyDelta = 0;
 int skejbyDelta = 0;
 
 bool isAwake = true;               // Track current state
-unsigned long wakeStartTime = 0;   // When did we wake up?
 unsigned long lastUpdateTime = 0;  // When did we last fetch data?
+unsigned long goToSleepTime = 0;   // When should we go to sleep?
 bool dataUpdated = false;
 
-// Volatile variable for Interrupts (must be volatile)
-bool buttonState = false;
+unsigned long alarmTime; // Track when to to beep
 
 // --- Main Setup ---
 void setup() {
@@ -59,23 +69,25 @@ void setup() {
 
 // --- Main Loop ---
 void loop() {
-  unsigned long currentMillis = millis();
-
-  bool currentButtonState = digitalRead(BUTTON_PIN);
-  if (buttonState != currentButtonState && currentButtonState == 0) {
-    exitSleepMode(); 
+  button.update();
+  
+  if (button.isSingleClick()) {
+    if (!isAwake) return exitSleepMode();
   }
-  buttonState = currentButtonState;
 
   // 2. IF AWAKE, HANDLE TASKS
   if (isAwake) {
+    unsigned long currentMillis = millis();
     runBeep();
+    showFlashingAlarm();
+    checkAlarm();
+
+    if (button.isLongClick()) {
+      toggleAlarm();
+    }
 
     // Check if 5 minutes have passed
-    if (
-      currentMillis > wakeStartTime &&
-      (currentMillis - wakeStartTime) >= STAY_AWAKE_TIME
-    ) {
+    if (currentMillis > goToSleepTime) {
       enterSleepMode();
     } else {
       // If we are still within the 5 minutes, check if we need to refresh data
@@ -99,11 +111,9 @@ void loop() {
     }
 
     if (dataUpdated) {
-      setLedColor(1, skejbyDelta);
-      setLedColor(0, vejlbyDelta);
+      setLedColor(SKEJBY, skejbyDelta);
+      setLedColor(VEJLBY, vejlbyDelta);
       strip.show();
-
-      beep();
 
       dataUpdated = false;
     }
@@ -112,18 +122,16 @@ void loop() {
 }
 
 void startupAnimation() {
-  unsigned long diff = millis() - wakeStartTime;
+  unsigned long diff = unsigned (goToSleepTime - millis());
   double brightness = ((sin(diff / 100) + 1) / 2) / 2;
   strip.fill(strip.Color(20 * brightness, 20 * brightness, 200 * brightness));
   strip.show();
 }
 
-// Helper: Calculate Color based on minutes
-// 0 mins = Green, 30 mins = Red, >30 mins = Off
-void setLedColor(int pixelIndex, int minutes) {
-  if (minutes > 25 || minutes < 0) {
+uint32_t getLedColor(int minutes, double brightness = 1) {
+  if (minutes > MAX_DEPARTURE_DELTA || minutes < 0) {
     // Too far away, turn off
-    strip.setPixelColor(pixelIndex, strip.Color(0, 0, 0));
+    return strip.Color(0, 0, 0);
   } else {
     // Map time to color: 
     // Closer to 0 -> More Green, Less Red
@@ -132,8 +140,14 @@ void setLedColor(int pixelIndex, int minutes) {
     int greenVal = map(minutes, 0, 25, 255, 0);
     
     // Set color (Red, Green, Blue)
-    strip.setPixelColor(pixelIndex, strip.Color(redVal * 0.2, greenVal * 0.2, 0));
+    return strip.Color(redVal * brightness * BASE_BRIGHTNESS, greenVal * brightness * BASE_BRIGHTNESS, 0);
   }
+}
+
+// Helper: Calculate Color based on minutes
+// 0 mins = Green, 30 mins = Red, >30 mins = Off
+void setLedColor(int pixelIndex, int minutes) {
+  strip.setPixelColor(pixelIndex, getLedColor(minutes, 1));
 }
 
 // Turn off WiFi, LCD, and LEDs
@@ -148,6 +162,9 @@ void enterSleepMode() {
 
   // 3. Turn off WiFi to save power
   WiFi.mode(WIFI_OFF); 
+  WiFi.disconnect();
+  WiFi.forceSleepBegin();
+  delay(1);
 
   isAwake = false;
 }
@@ -157,11 +174,14 @@ void exitSleepMode() {
   Serial.println("Waking Up...");
 
   // 2. Turn on WiFi
+  WiFi.forceSleepWake();
+  delay(1);
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
 
   // 3. Reset Timers
-  wakeStartTime = millis();
+  goToSleepTime = millis() + STAY_AWAKE_TIME;
   
   // Force an immediate update in the main loop
   lastUpdateTime = 0; 
@@ -201,6 +221,54 @@ void fetchData() {
     // lcd.clear(); lcd.print("Err: " + String(httpCode));
   }
   http.end();
+}
+
+void toggleAlarm() {
+  if (alarmTime > 0) {
+    stopAlarm();    
+  } else {
+    setAlarm();
+  }
+}
+
+int ledToBlink = -1;
+void setAlarm() {
+  // Ignore if no bus is close enough
+  if (vejlbyDelta > MAX_DEPARTURE_DELTA && skejbyDelta > MAX_DEPARTURE_DELTA) return;
+
+  unsigned int soonestBus = (unsigned int) max(min(skejbyDelta, vejlbyDelta), 0);
+  alarmTime = millis() + ((soonestBus - 1) * 1000 * 60);
+  goToSleepTime = alarmTime + (1000 * 60);
+
+  ledToBlink = skejbyDelta < vejlbyDelta ? SKEJBY : VEJLBY;
+
+  Serial.print("Setting alarm for "); Serial.print(soonestBus - 1); Serial.println(" minutes");
+}
+
+void showFlashingAlarm() {
+  if (ledToBlink != -1) {
+    unsigned int diff = millis();
+    double brightness = ((sin(diff / 200) + 1) / 2) * 0.6 + 0.2;
+    int minutes = ledToBlink == VEJLBY ? vejlbyDelta : skejbyDelta;
+    strip.setPixelColor(ledToBlink, getLedColor(minutes, brightness));
+
+    strip.show();
+  }
+}
+
+void checkAlarm() {
+  if (alarmTime > 0 && millis() > alarmTime) {
+    beep();
+    stopAlarm();
+  }
+}
+
+void stopAlarm() {
+    alarmTime = 0;
+    ledToBlink = -1;
+
+    // Reset LEDs
+    dataUpdated = true;
 }
 
 unsigned long beepStart = 0;
