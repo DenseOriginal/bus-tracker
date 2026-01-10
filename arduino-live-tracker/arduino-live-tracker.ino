@@ -22,7 +22,7 @@ const unsigned long STAY_AWAKE_TIME = 1000 * 60 * 5; // 5 minutes in millisecond
 const unsigned long REFRESH_INTERVAL = 1000 * 30; // Refresh data every 30s while awake
 const unsigned int MAX_DEPARTURE_DELTA = 25;
 
-#define BEEP_TIME 400
+#define BEEP_TIME 800
 #define BEEP_FREQUENCY 1200
 
 #define ALARM_BLINK_TIME 5000
@@ -260,12 +260,14 @@ void checkAlarm() {
   if (alarmTime > 0 && millis() > alarmTime) {
     beep();
     stopAlarm();
+    goToSleepTime = millis() + 1000 * 60;
   }
 }
 
 void stopAlarm() {
     alarmTime = 0;
     ledToBlink = -1;
+    goToSleepTime = millis() + STAY_AWAKE_TIME;
 
     // Reset LEDs
     dataUpdated = true;
@@ -286,7 +288,7 @@ void runBeep() {
   }
 
   unsigned int beepDuration = millis() - beepStart;
-  if (int (beepDuration / (BEEP_TIME / 5)) % 2 == 0) {
+  if (int (beepDuration / (BEEP_TIME / 9)) % 2 == 0) {
     tone(BUZZER_PIN, BEEP_FREQUENCY);
   } else {
     noTone(BUZZER_PIN);
